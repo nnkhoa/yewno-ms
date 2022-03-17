@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import pandas as pd
-# import keybert
+from keybert import KeyBERT
 import bertopic
 import platform
 import pickle
@@ -181,6 +181,21 @@ def kmean_clustering_yellowbrick(k_start, k_end, doc_emb_data, month):
 
     return clustering, optimal_k, silhouette_score(doc_emb_data, clustering.labels_), elbow_score
 
+
+def keybert_extraction(corpus):
+    sentence_model = SentenceTransformer('sentence-transformers/stsb-roberta-base-v2')
+    kw_model = KeyBERT(model=sentence_model)
+
+    corpus_kw_list = []
+
+    for doc in tqdm(corpus):
+        kw_distance = kw_model.extract_keywords(doc, keyphrase_ngram_range=(1,2), stop_words='english', top_n=5)
+        doc_kw_list = [kw_data[0] for kw_data in kw_distance]
+        corpus_kw_list.extend(doc_kw_list)
+
+    return list(set(corpus_kw_list))
+
+
 # class EDFHandler(DataHandler):
 #     def load_data(self):
 #         with open(self.data_path, 'rb') as f:
@@ -225,6 +240,7 @@ if __name__ == '__main__':
     YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_emb.pickle'
     BIGRAM_CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_bigram_concept_count.pickle'
     EDF_EMB_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/embeddings/'
+    KEYBERT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/keybert_emb.pickle'
 
     monthly_file = ['2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01',
                     '2019-12-01', '2020-01-01', '2020-02-01', '2020-03-01', '2020-04-01',
@@ -242,6 +258,7 @@ if __name__ == '__main__':
         YEWNO_CONCEPT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_emb.pickle'
         PERIOD_DATA_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\'
         EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\embeddings\\'
+        KEYBERT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\keybert_emb.pickle'
 
     # Getting the roberta representation for concept
     '''    
@@ -298,6 +315,8 @@ if __name__ == '__main__':
 
     # similarity_df = pd.DataFrame(index=yewno_emb_df.index)
 
+    # clustering process
+    '''
     with open(PERIOD_DATA_PATH + 'clustering_stats_elbow_no-st-text.txt', 'w+') as f:
         f.write('Clustering Stats: \n')
 
@@ -335,3 +354,30 @@ if __name__ == '__main__':
         with open(PERIOD_DATA_PATH + month + '_cluster_elbow-labels.txt', 'w+') as f:
             for label in cluster_labels:
                 f.write(f'{label}\n')
+    '''
+    full_kw_list = []
+
+    for month in monthly_file:
+        print(month)
+        month_data_path = PERIOD_DATA_PATH + month
+        edf_handler = DataHandler(month_data_path)
+        edf_df = edf_handler.load_data()
+
+        if 'pre_process' not in edf_df:
+            text_preprocessing(edf_df)
+            edf_handler.save_data(edf_df)
+
+        text_list = edf_df['pre_process'].tolist()
+        index_list = edf_df.index.tolist()
+
+        keyword_list_month = keybert_extraction(text_list)
+        full_kw_list.extend(keyword_list_month)
+
+    kw_model = SentenceTransformer('sentence-transformers/stsb-roberta-base-v2')
+
+    embeddings = kw_model.encode(full_kw_list)
+
+    kw_embeddings_df = pd.DataFrame(data=embeddings, index=full_kw_list)
+
+    keybert_emb_handler = DataHandler(KEYBERT_EMBEDDINGS_PATH)
+    keybert_emb_handler.save_data(kw_embeddings_df)
