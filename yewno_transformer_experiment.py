@@ -220,7 +220,8 @@ if __name__ == '__main__':
         YEWNO_CONCEPT_DICT_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_dict.pickle'
         YEWNO_CONCEPT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_emb.pickle'
         PERIOD_DATA_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\'
-        EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\edf_emb.pickle'
+        EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\embeddings'
+
 
     # Getting the roberta representation for concept
     '''    
