@@ -102,8 +102,9 @@ def plot_doc_emb(doc_emb_data, cluster_label, num_cluster, cluster_center=None):
             xy = np.vstack([xy, cluster_center[i]])
 
         # print(centroid.shape)
-        # print(xy[-1].shape)
+        # print(xy[-1])
         two_dim = PCA(n_components=max(axes)+1).fit_transform(xy)
+        print(two_dim[-1])
         color = colors[i] if i > -1 else defaultcolor
         ax.scatter(two_dim[:-1, axes[0]], two_dim[:-1, axes[1]], color=color, label=i, s=10)
         ax.scatter(two_dim[-1, axes[0]], two_dim[-1, axes[1]], color=color, s=40, edgecolor='black')
@@ -142,7 +143,7 @@ def kmean_clustering(k_start, k_end, doc_emb_data):
 
     for k in range(k_start, k_end+1):
         start_time = time.time()
-        clustering = KMeans(n_clusters=k, init='k-means++').fit(doc_emb_data)
+        clustering = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(doc_emb_data)
         ss = silhouette_score(doc_emb_data, clustering.labels_)
         print(f'k = {k}, clustering time: ', time.time() - start_time)
 
@@ -154,7 +155,10 @@ def kmean_clustering(k_start, k_end, doc_emb_data):
 
     centroid = list(chosen_model.cluster_centers_)
 
-    plot_doc_emb(doc_emb_data, chosen_model.labels_, chosen_k, cluster_center=centroid)
+    # plot_doc_emb(doc_emb_data, chosen_model.labels_, chosen_k, cluster_center=centroid)
+    # print(cosine_similarity(centroid))
+
+    return chosen_model, chosen_k, ss_max
 
 # class EDFHandler(DataHandler):
 #     def load_data(self):
@@ -199,7 +203,7 @@ if __name__ == '__main__':
     YEWNO_CONCEPT_DICT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_dict.pickle'
     YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_emb.pickle'
     BIGRAM_CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_bigram_concept_count.pickle'
-    EDF_EMB_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/edf_emb.pickle'
+    EDF_EMB_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/embeddings/'
 
     monthly_file = ['2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01',
                     '2019-12-01', '2020-01-01', '2020-02-01', '2020-03-01', '2020-04-01',
@@ -267,6 +271,42 @@ if __name__ == '__main__':
         np.savetxt(PERIOD_DATA_PATH + 'embeddings/' + month + '_no-st-text_emb.csv', doc_emb_array)
     '''
 
-    data_np = np.genfromtxt('/Users/khoanguyen/Workspace/dataset/edf_msft/embeddings/2019-08-01_emb.csv')
+    yewno_emb_handler = DataHandler(YEWNO_CONCEPT_EMBEDDINGS_PATH)
+    yewno_emb_df = yewno_emb_handler.load_data()
+    yewno_emb_arr = list(yewno_emb_df.to_numpy())
 
-    kmean_clustering(k_start=5, k_end=50, doc_emb_data=data_np)
+    similarity_df = pd.DataFrame(index=yewno_emb_df.index)
+
+    with open(PERIOD_DATA_PATH + 'clustering_stats_no-st-text.txt', 'w+') as f:
+        f.write('Clustering Stats: \n')
+
+    for month in monthly_file:
+        similarity_df = pd.DataFrame(index=yewno_emb_df.index)
+
+        month_doc_emb_path = EDF_EMB_PATH + month + '_no-st-text_emb.csv'
+        doc_emb_data = np.genfromtxt(month_doc_emb_path)
+
+        model, k, sil_score = kmean_clustering(k_start=5, k_end=50, doc_emb_data=doc_emb_data)
+
+        centroid = list(model.cluster_centers_)
+
+        cluster_labels = model.labels_
+
+        for i in range(len(centroid)):
+            similarity_matrix = cosine_similarity(yewno_emb_arr, [centroid[i]])
+
+            similarity_df[i] = similarity_matrix
+
+        save_path = PERIOD_DATA_PATH + month + '_yewno_similarity.pickle'
+        month_similarity_file_handler = DataHandler(save_path)
+        month_similarity_file_handler.save_data(similarity_df)
+
+        with open(PERIOD_DATA_PATH + 'clustering_stats_no-st-text.txt', 'a+') as f:
+            f.write(month + '\n')
+            f.write(f'Number of clusters: {k}\n')
+            f.write(f'Silhouette Score: {sil_score}\n')
+            f.write('\n')
+
+        with open(PERIOD_DATA_PATH + month + '_cluster-labels.txt', 'w+') as f:
+            for label in cluster_labels:
+                f.write(f'{label}\n')
