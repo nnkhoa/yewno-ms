@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import pandas as pd
-import keybert
+# import keybert
 import bertopic
 import platform
 import pickle
@@ -15,6 +15,8 @@ from sklearn.metrics import silhouette_score
 from matplotlib import pyplot as plt
 from matplotlib import cm
 import hdbscan
+
+from yellowbrick.cluster import KElbowVisualizer
 
 import time
 
@@ -153,12 +155,31 @@ def kmean_clustering(k_start, k_end, doc_emb_data):
             chosen_model = clustering
             print(f'New best silhouette score = {ss}, k = {chosen_k}')
 
-    centroid = list(chosen_model.cluster_centers_)
+    # centroid = list(chosen_model.cluster_centers_)
 
     # plot_doc_emb(doc_emb_data, chosen_model.labels_, chosen_k, cluster_center=centroid)
     # print(cosine_similarity(centroid))
 
     return chosen_model, chosen_k, ss_max
+
+
+def kmean_clustering_yellowbrick(k_start, k_end, doc_emb_data, month):
+    visualizer = KElbowVisualizer(KMeans(random_state=0), k=(k_start, k_end)).fit(doc_emb_data)
+
+    # print('Optimal k: ', visualizer.elbow_value_)
+    visualizer.show(outpath='K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\elbow_kmean_msft\\' + month + '.png')
+    # print('Silhouette Score: ', visualizer.k_scores_)
+    optimal_k = visualizer.elbow_value_
+    elbow_score = visualizer.elbow_score_
+    clustering = KMeans(n_clusters=optimal_k, init='k-means++', random_state=0).fit(doc_emb_data)
+
+    visualizer.poof()
+
+    print(month)
+    print('Optimal k: ', optimal_k)
+    print('Elbow Score: ', elbow_score)
+
+    return clustering, optimal_k, silhouette_score(doc_emb_data, clustering.labels_), elbow_score
 
 # class EDFHandler(DataHandler):
 #     def load_data(self):
@@ -220,8 +241,7 @@ if __name__ == '__main__':
         YEWNO_CONCEPT_DICT_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_dict.pickle'
         YEWNO_CONCEPT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_emb.pickle'
         PERIOD_DATA_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\'
-        EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\embeddings'
-
+        EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\embeddings\\'
 
     # Getting the roberta representation for concept
     '''    
@@ -276,9 +296,9 @@ if __name__ == '__main__':
     yewno_emb_df = yewno_emb_handler.load_data()
     yewno_emb_arr = list(yewno_emb_df.to_numpy())
 
-    similarity_df = pd.DataFrame(index=yewno_emb_df.index)
+    # similarity_df = pd.DataFrame(index=yewno_emb_df.index)
 
-    with open(PERIOD_DATA_PATH + 'clustering_stats_no-st-text.txt', 'w+') as f:
+    with open(PERIOD_DATA_PATH + 'clustering_stats_elbow_no-st-text.txt', 'w+') as f:
         f.write('Clustering Stats: \n')
 
     for month in monthly_file:
@@ -287,7 +307,9 @@ if __name__ == '__main__':
         month_doc_emb_path = EDF_EMB_PATH + month + '_no-st-text_emb.csv'
         doc_emb_data = np.genfromtxt(month_doc_emb_path)
 
-        model, k, sil_score = kmean_clustering(k_start=5, k_end=50, doc_emb_data=doc_emb_data)
+        # model, k, sil_score = kmean_clustering(k_start=5, k_end=50, doc_emb_data=doc_emb_data)
+        elbow_score = None
+        model, k, sil_score, elbow_score = kmean_clustering_yellowbrick(k_start=5, k_end=50, doc_emb_data=doc_emb_data, month=month)
 
         centroid = list(model.cluster_centers_)
 
@@ -298,16 +320,18 @@ if __name__ == '__main__':
 
             similarity_df[i] = similarity_matrix
 
-        save_path = PERIOD_DATA_PATH + month + '_yewno_similarity.pickle'
+        save_path = PERIOD_DATA_PATH + month + '_yewno_similarity_elbow.pickle'
         month_similarity_file_handler = DataHandler(save_path)
         month_similarity_file_handler.save_data(similarity_df)
 
-        with open(PERIOD_DATA_PATH + 'clustering_stats_no-st-text.txt', 'a+') as f:
+        with open(PERIOD_DATA_PATH + 'clustering_stats_elbow_no-st-text.txt', 'a+') as f:
             f.write(month + '\n')
             f.write(f'Number of clusters: {k}\n')
             f.write(f'Silhouette Score: {sil_score}\n')
+            if elbow_score:
+                f.write(f'Elbow Score: {elbow_score}\n')
             f.write('\n')
 
-        with open(PERIOD_DATA_PATH + month + '_cluster-labels.txt', 'w+') as f:
+        with open(PERIOD_DATA_PATH + month + '_cluster_elbow-labels.txt', 'w+') as f:
             for label in cluster_labels:
                 f.write(f'{label}\n')
