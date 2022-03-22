@@ -15,6 +15,7 @@ from sklearn.metrics import silhouette_score
 from matplotlib import pyplot as plt
 from matplotlib import cm
 import hdbscan
+import umap
 
 from yellowbrick.cluster import KElbowVisualizer
 
@@ -119,8 +120,11 @@ def plot_doc_emb(doc_emb_data, cluster_label, num_cluster, cluster_center=None):
 
 
 def hdbscan_clustering(doc_emb_data):
+    umap_embeddings = umap.UMAP(n_neighbors=15,
+                                n_components=5,
+                                metric='cosine').fit_transform(doc_emb_data)
     start_time = time.time()
-    clustering = hdbscan.HDBSCAN().fit(doc_emb_data)
+    clustering = hdbscan.HDBSCAN().fit(umap_embeddings)
     print('Clustering time: ', time.time() - start_time)
     labels = clustering.labels_
 
@@ -237,7 +241,7 @@ if __name__ == '__main__':
     PERIOD_DATA_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/'
     CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_concept_count.pickle'
     YEWNO_CONCEPT_DICT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_dict.pickle'
-    YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_emb.pickle'
+    YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_context_emb.pickle'
     BIGRAM_CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_bigram_concept_count.pickle'
     EDF_EMB_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/embeddings/'
     KEYBERT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/keybert_emb.pickle'
@@ -261,18 +265,22 @@ if __name__ == '__main__':
         KEYBERT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\keybert_emb.pickle'
 
     # Getting the roberta representation for concept
-    '''    
+    '''
     yewno_dict_handler = DataHandler(YEWNO_CONCEPT_DICT_PATH)
     yewno_dict_df = yewno_dict_handler.load_data()
 
     yewno_concept_handler = DataHandler(FILTERED_YEWNO_PATH)
     yewno_concept_df = yewno_concept_handler.load_data()
 
-    concept_list = yewno_concept_df['Concept'].tolist()
+    concept_list = yewno_dict_df['Concept'].tolist()
+    concept_definition = yewno_dict_df['Definition'].tolist()
+
+    concept_with_context = [concept + ' ' + definition
+                            for concept, definition in zip(concept_list, concept_definition)]
 
     concept_model = SentenceTransformer('sentence-transformers/stsb-roberta-base-v2')
 
-    embeddings = concept_model.encode(concept_list)
+    embeddings = concept_model.encode(concept_with_context)
 
     concept_embeddings_df = pd.DataFrame(data=embeddings, index=concept_list)
 
@@ -355,6 +363,9 @@ if __name__ == '__main__':
             for label in cluster_labels:
                 f.write(f'{label}\n')
     '''
+
+    # keyBERT embeddings creation
+    '''
     full_kw_list = []
 
     for month in monthly_file:
@@ -381,3 +392,4 @@ if __name__ == '__main__':
 
     keybert_emb_handler = DataHandler(KEYBERT_EMBEDDINGS_PATH)
     keybert_emb_handler.save_data(kw_embeddings_df)
+    '''
