@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import pandas as pd
-from keybert import KeyBERT
+# from keybert import KeyBERT
 import bertopic
 import platform
 import pickle
@@ -97,32 +97,48 @@ def plot_doc_emb(doc_emb_data, cluster_label, num_cluster, cluster_center=None):
     colors = colors_map(range(num_cluster))
     axes = [0, 1]
 
+    map_data = umap.UMAP(n_neighbors=15,
+                         n_components=2,
+                         min_dist=0.0,
+                         metric='cosine',
+                         random_state=10).fit_transform(doc_emb_data)
+
     fig, ax = plt.subplots()
-    for i in range(num_cluster):
-        xy = doc_emb_data[cluster_label == i]
+    # for i in range(num_cluster):
+    #     xy = doc_emb_data[cluster_label == i]
+    #
+    #     if cluster_center:
+    #         xy = np.vstack([xy, cluster_center[i]])
+    #
+    #     # print(centroid.shape)
+    #     # print(xy[-1])
+    #     two_dim = PCA(n_components=max(axes)+1).fit_transform(xy)
+    #
+    #     color = colors[i] if i > -1 else defaultcolor
+    #     if cluster_center:
+    #         ax.scatter(two_dim[:-1, axes[0]], two_dim[:-1, axes[1]], color=color, label=i, s=10, c_map='hsv_r')
+    #         ax.scatter(two_dim[-1, axes[0]], two_dim[-1, axes[1]], color=color, s=40, edgecolor='black')
+    #
+    #         annotate_text = f"center#{i}"
+    #         ax.annotate(text=annotate_text, xy=(two_dim[-1, axes[0]], two_dim[-1, axes[1]]), fontsize=5)
+    #     else:
+    #         ax.scatter(two_dim[:, axes[0]], two_dim[:, axes[1]], color=i, label=i, s=5, c_map='hsv_r')
 
-        if cluster_center:
-            xy = np.vstack([xy, cluster_center[i]])
-
-        # print(centroid.shape)
-        # print(xy[-1])
-        two_dim = PCA(n_components=max(axes)+1).fit_transform(xy)
-        print(two_dim[-1])
-        color = colors[i] if i > -1 else defaultcolor
-        ax.scatter(two_dim[:-1, axes[0]], two_dim[:-1, axes[1]], color=color, label=i, s=10)
-        ax.scatter(two_dim[-1, axes[0]], two_dim[-1, axes[1]], color=color, s=40, edgecolor='black')
-
-        annotate_text = f"center#{i}"
-        ax.annotate(text=annotate_text, xy=(two_dim[-1, axes[0]], two_dim[-1, axes[1]]), fontsize=5)
-
-    ax.legend(loc='upper right', bbox_to_anchor=(0.0, 1.0), frameon=True)
+    # ax.legend(loc='upper right', bbox_to_anchor=(0.0, 1.0), frameon=True)
+    plt.scatter(map_data[cluster_label >= 0, 0],
+                map_data[cluster_label >= 0, 1],
+                c=cluster_label[cluster_label >= 0],
+                cmap='hsv_r', s=5)
+    plt.colorbar()
     plt.show()
 
 
 def hdbscan_clustering(doc_emb_data):
     umap_embeddings = umap.UMAP(n_neighbors=15,
                                 n_components=5,
-                                metric='cosine').fit_transform(doc_emb_data)
+                                metric='cosine',
+                                random_state=10).fit_transform(doc_emb_data)
+
     start_time = time.time()
     clustering = hdbscan.HDBSCAN().fit(umap_embeddings)
     print('Clustering time: ', time.time() - start_time)
@@ -139,7 +155,7 @@ def hdbscan_clustering(doc_emb_data):
     print('Number of Noise: ', num_noise)
     print(labels)
 
-    plot_doc_emb(doc_emb_data, labels, num_clusters, faux_centroid)
+    plot_doc_emb(umap_embeddings, labels, num_clusters)
 
 
 def kmean_clustering(k_start, k_end, doc_emb_data):
@@ -259,7 +275,7 @@ if __name__ == '__main__':
         BIGRAM_CONCEPT_COUNT_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\yewno-edf_bigram_concept_count' \
                                     '.pickle '
         YEWNO_CONCEPT_DICT_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_dict.pickle'
-        YEWNO_CONCEPT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_emb.pickle'
+        YEWNO_CONCEPT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\yewno_concept_context_emb.pickle'
         PERIOD_DATA_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\'
         EDF_EMB_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\Data\\MSFT\\embeddings\\'
         KEYBERT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\keybert_emb.pickle'
@@ -317,9 +333,11 @@ if __name__ == '__main__':
         np.savetxt(PERIOD_DATA_PATH + 'embeddings/' + month + '_no-st-text_emb.csv', doc_emb_array)
     '''
 
+    '''
     yewno_emb_handler = DataHandler(YEWNO_CONCEPT_EMBEDDINGS_PATH)
     yewno_emb_df = yewno_emb_handler.load_data()
     yewno_emb_arr = list(yewno_emb_df.to_numpy())
+    '''
 
     # similarity_df = pd.DataFrame(index=yewno_emb_df.index)
 
@@ -393,3 +411,12 @@ if __name__ == '__main__':
     keybert_emb_handler = DataHandler(KEYBERT_EMBEDDINGS_PATH)
     keybert_emb_handler.save_data(kw_embeddings_df)
     '''
+
+    for month in monthly_file:
+        # similarity_df = pd.DataFrame(index=yewno_emb_df.index)
+
+        month_doc_emb_path = EDF_EMB_PATH + month + '_no-st-text_emb.csv'
+        doc_emb_data = np.genfromtxt(month_doc_emb_path)
+
+        hdbscan_clustering(doc_emb_data)
+
