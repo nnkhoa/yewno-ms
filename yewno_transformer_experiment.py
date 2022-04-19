@@ -42,6 +42,16 @@ class DataHandler:
             pickle.dump(data, f)
 
 
+def hypernym_dict_extraction(data_row):
+    hypernym_list = []
+    for entry in data_row:
+        hypernym_list.append(entry['title'])
+        if 'subtopics' in entry:
+            for subentry in entry['subtopics']:
+                hypernym_list.append(subentry['title'])
+    return hypernym_list
+
+
 def remove_noise(text):
     if ' -- ' in text:
         text = text[text.index(' -- '):]
@@ -252,6 +262,13 @@ def bertopic_extraction(corpus, save_path):
     topic_model.save(save_path)
 
 
+def get_top_percentile(df_column, percentile=0.97):
+    non_negative_value = df_column[df_column > 0]
+    threshold = non_negative_value.quantile(percentile)
+    top_percentile = non_negative_value[non_negative_value > threshold].index.tolist()
+    return len(top_percentile)
+
+
 # class EDFHandler(DataHandler):
 #     def load_data(self):
 #         with open(self.data_path, 'rb') as f:
@@ -293,7 +310,7 @@ if __name__ == '__main__':
     PERIOD_DATA_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/'
     CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_concept_count.pickle'
     YEWNO_CONCEPT_DICT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_dict.pickle'
-    YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_no-context_emb.pickle'
+    YEWNO_CONCEPT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno_concept_with-context_emb.pickle'
     BIGRAM_CONCEPT_COUNT_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/yewno-edf_bigram_concept_count.pickle'
     EDF_EMB_PATH = '/Users/khoanguyen/Workspace/dataset/edf_msft/embeddings/'
     KEYBERT_EMBEDDINGS_PATH = '/Users/khoanguyen/Workspace/dataset/Yewno/keybert_emb.pickle'
@@ -317,26 +334,48 @@ if __name__ == '__main__':
         KEYBERT_EMBEDDINGS_PATH = 'K:\\Lbpam\\DG_Gestion_Quant\\GERANT\\Khoa\\keybert_emb.pickle'
 
     # Getting the roberta representation for concept
-    '''
+    # '''
     yewno_dict_handler = DataHandler(YEWNO_CONCEPT_DICT_PATH)
     yewno_dict_df = yewno_dict_handler.load_data()
 
     yewno_concept_handler = DataHandler(YEWNO_DATA_PATH)
     yewno_concept_df = yewno_concept_handler.load_data()
-
+    '''
     concept_list = yewno_dict_df['Concept'].tolist()
-    # concept_definition = yewno_dict_df['Definition'].tolist()
-    # concept_list = yewno_concept_df['Concept'].tolist()
+    concept_definition = yewno_dict_df['Definition'].tolist()
+    concept_info_misc = yewno_dict_df['Misc'].tolist()
 
+    # update concept with misc info for less ambiguity
+    if 'Concept-Misc' not in yewno_dict_df:
+        concept_with_misc = []
+        # concept_with_context = []
+        for concept, misc_info in zip(concept_list, concept_info_misc):
+            # if misc_info.lower() in concept.lower():
+            #     concept_extra_info = concept
+            # elif concept.lower() in misc_info.lower():
+            #     concept_extra_info = misc_info
+            # else:
+            concept_extra_info = concept + ' - ' + misc_info
+            # concept_with_context.append(concept + ': ' + definition)
+
+            concept_with_misc.append(concept_extra_info)
+
+        yewno_dict_df['Concept-Misc'] = pd.Series(concept_with_misc)
+        yewno_dict_handler.save_data(yewno_dict_df)
+
+    concept_misc = yewno_dict_df['Concept-Misc']
     # concept_with_context = [concept + ' ' + definition
     #                         for concept, definition in zip(concept_list, concept_definition)]
+
+    # concept_with_context = [concept + ' ' + definition
+    #                         for concept, definition in zip(concept_misc, concept_definition)]
 
     concept_model = SentenceTransformer('sentence-transformers/stsb-roberta-base-v2')
 
     # embeddings = concept_model.encode(concept_with_context)
-    embeddings = concept_model.encode(concept_list)
+    embeddings = concept_model.encode(concept_misc)
 
-    concept_embeddings_df = pd.DataFrame(data=embeddings, index=concept_list)
+    concept_embeddings_df = pd.DataFrame(data=embeddings, index=concept_misc)
 
     yewno_emb_handler = DataHandler(YEWNO_CONCEPT_EMBEDDINGS_PATH)
     yewno_emb_handler.save_data(concept_embeddings_df)
@@ -372,11 +411,11 @@ if __name__ == '__main__':
     '''
 
     # load yewno concept embeddings
-    '''
+    # '''
     yewno_emb_handler = DataHandler(YEWNO_CONCEPT_EMBEDDINGS_PATH)
     yewno_emb_df = yewno_emb_handler.load_data()
     yewno_emb_arr = list(yewno_emb_df.to_numpy())
-    '''
+    # '''
 
     # similarity_df = pd.DataFrame(index=yewno_emb_df.index)
 
@@ -404,7 +443,7 @@ if __name__ == '__main__':
 
             similarity_df[i] = similarity_matrix
 
-        save_path = PERIOD_DATA_PATH + month + '_yewno_no-context_similarity_elbow.pickle'
+        save_path = PERIOD_DATA_PATH + month + '_yewno_with-context_similarity_elbow.pickle'
         month_similarity_file_handler = DataHandler(save_path)
         month_similarity_file_handler.save_data(similarity_df)
 
@@ -421,7 +460,7 @@ if __name__ == '__main__':
                 f.write(f'{label}\n')
     '''
 
-    # keyBERT embeddings creation
+    # TODO keyBERT embeddings creation
     '''
     full_kw_list = []
 
@@ -451,7 +490,7 @@ if __name__ == '__main__':
     keybert_emb_handler.save_data(kw_embeddings_df)
     '''
 
-    # '''
+    '''
     if not os.path.isdir(PERIOD_DATA_PATH + 'bertopic_models'):
         os.mkdir(PERIOD_DATA_PATH + 'bertopic_models')
 
@@ -481,14 +520,16 @@ if __name__ == '__main__':
         # doc_emb_data = np.genfromtxt(month_doc_emb_path)
         #
         # hdbscan_clustering(doc_emb_data)
-    # '''
+    '''
 
-    # extract top concepts in each month for each type of embeddings
+    # TODO extract top concepts in each month for each type of embeddings
     '''
     file_prefix = ['no-context_ms',      # concept related to MS extracted from yewno
                    'no-context',         # concept extracted from yewno's dictionary
                    'with-context']       # concept extracted from yewno's dictionary with definition as context
 
+    concept_info = ['Concept', 'Definition', 'Type']
+    
     for month in tqdm(monthly_file):
         # get num_cluster in month
         sample_results_file = PERIOD_DATA_PATH + month + '_yewno_' + file_prefix[0] + '_similarity_elbow.pickle'
@@ -497,7 +538,7 @@ if __name__ == '__main__':
         num_cluster = sample_data.columns.tolist()
         del sample_data
 
-        columns = pd.MultiIndex.from_product([num_cluster, file_prefix])
+        columns = pd.MultiIndex.from_product([num_cluster, file_prefix, concept_info])
         similar_concept = pd.DataFrame(columns=columns)
 
         for prefix in file_prefix:
@@ -505,10 +546,80 @@ if __name__ == '__main__':
             with open(file_path, 'rb') as f:
                 data = pickle.load(f)
             for cluster in num_cluster:
-                top_concepts = data[cluster].sort_values(ascending=False).head(20).index.tolist()
-                similar_concept[cluster, prefix] = top_concepts
+                similarity_sort = data[cluster].sort_values(ascending=False)
+                # top_concepts = similarity_sort[similarity_sort > 0.5].index.tolist()
 
-        save_file = month + '_similar_concepts.pickle'
+                # non_negative_similarity = similarity_sort[similarity_sort > 0]
+                # threshold = non_negative_similarity.quantile(0.99)
+                # top_concepts = non_negative_similarity[non_negative_similarity > threshold].index.tolist()
+
+                top_concepts = similarity_sort.head(10).index.tolist()
+
+                if len(top_concepts) > len(similar_concept.index):
+                    similar_concept = similar_concept.reindex(range(0, len(top_concepts)))
+                similar_concept[cluster, prefix, 'Concept'] = pd.Series(top_concepts)
+
+                if prefix in ['no-context', 'with-context']:
+                    def_list = yewno_dict_df[yewno_dict_df['Concept-Misc'].isin(top_concepts)]
+                    for concept in top_concepts:
+                        def_row = def_list.loc[def_list['Concept-Misc'] == concept]
+                        definition = def_row['Definition'].values[0]
+                        concept_type = hypernym_dict_extraction(def_row['Hypernym'].values[0])
+                        row = similar_concept.loc[similar_concept[cluster, prefix, 'Concept'] == concept]
+                        try:
+                            row_index = row.index[0]
+                        except IndexError:
+                            pass
+                        else:
+                            similar_concept.at[row_index, (cluster, prefix, 'Definition')] = definition
+                            similar_concept.at[row_index, (cluster, prefix, 'Type')] = concept_type
+
+        save_file = month + '_top10_similar_concepts.pickle'
         with open(PERIOD_DATA_PATH + save_file, 'wb') as f:
             pickle.dump(similar_concept, f)
     '''
+
+    '''
+    # TODO Plot concept similarity graph
+    file_prefix = ['no-context_ms',      # concept related to MS extracted from yewno
+                   'no-context',         # concept extracted from yewno's dictionary
+                   'with-context']       # concept extracted from yewno's dictionary with definition as context
+
+    concept_info = ['Concept', 'Definition', 'Type']
+    top_concept_count_per_cluster = pd.DataFrame()
+    for month in tqdm(monthly_file):
+        # get num_cluster in month
+        sample_results_file = PERIOD_DATA_PATH + month + '_yewno_' + file_prefix[0] + '_similarity_elbow.pickle'
+        with open(sample_results_file, 'rb') as f:
+            sample_data = pickle.load(f)
+
+        temp = sample_data.apply(lambda x: get_top_percentile(x, percentile=.99), axis=0)
+
+        if len(temp) > len(top_concept_count_per_cluster.index):
+            top_concept_count_per_cluster = top_concept_count_per_cluster.reindex(range(0,len(temp)))
+
+        top_concept_count_per_cluster[month] = temp
+    '''
+
+    # '''
+    top_concept_cluster_monthly = pd.DataFrame()
+    for month in monthly_file:
+        save_file = month + '_top10_similar_concepts.pickle'
+        with open(PERIOD_DATA_PATH + save_file, 'rb') as f:
+            data = pickle.load(f)
+        # concept_similarity.append(data)
+
+        num_cluster = list(set([column[0] for column in data.columns.tolist()]))
+
+        concept_all_cluster = pd.concat([data[cluster, 'with-context', 'Concept'] for cluster in num_cluster])
+        concept_all_cluster.dropna(inplace=True)
+        concept_count = concept_all_cluster.value_counts()
+
+        top_concept_cluster_monthly[month] = concept_count
+        # print()
+    output = PERIOD_DATA_PATH + 'monthly_top_concepts_all_clusters_top10.pickle'
+
+    with open(output, 'wb') as f:
+        pickle.dump(top_concept_cluster_monthly, f)
+    # '''
+
